@@ -5,8 +5,22 @@ from pathlib import Path
 import datetime
 import subprocess
 import dropbox_backup
+import smtplib
 
 
+
+class SendMail(object):
+    def __init__(self, config):
+        self._config = config
+
+    def send(self, subject, body):
+        msg = "From: {}\nTo: {}\nSubject: {}\n\n{}".format(self._config["mail"]["from"],
+                                                           self._config["mail"]["to"],
+                                                           subject, body)
+        server = smtplib.SMTP_SSL(self._config["mail"]["server_out"], int(self._config["mail"]["port_out"]))
+        server.login(self._config["mail"]["username"], self._config["mail"]["password"])
+        server.sendmail(self._config["mail"]["from"], self._config["mail"]["to"], msg)
+        server.quit()
 
 class LockFile(object):
     def __init__(self, config):
@@ -36,7 +50,8 @@ class BackupLog(object):
 
 
 class EncryptedBackup(object):
-    def __init__(self, config):
+    def __init__(self, config, mailer):
+        self._mailer = mailer
         date_today = str(datetime.date.today())
         inc_name = "Backup_{}".format(date_today)
         self._incrementals_dir = Path(config["backup"]["target_dir"]) / "Incremental"
@@ -63,6 +78,10 @@ class EncryptedBackup(object):
     def _delete_mirror_if_full_backup(self):
         dirs = list(self._incrementals_dir.glob("*"))
         if (len(dirs) % self._full_backup_interval == 0):
+            try:
+                mailer.send("Starting full backup", "Starting full backup.")
+            except:
+                pass
             self._log.write("Number of incremental backups is a multiple of " +
                 " {}.".format(self._full_backup_interval))
             self._log.write("Time for a full backup.")
@@ -101,30 +120,21 @@ class EncryptedBackup(object):
     def _encrypt_incremental(self):
         self._delete_file(self._encrypted_file)
         self._log.write("Encrypting incremental backup.")
-        enc_cmd = "gpg -o {} --encrypt -r {} {}".format(self._encrypted_file,
-                self._gpg_public_key, self._tar_file)
+        enc_cmd = "gpg -o {} --encrypt -r {} {}".format(self._encrypted_file, self._gpg_public_key, self._tar_file)
         self._log.write("Running: {}".format(enc_cmd))
         enc_proc = subprocess.run(enc_cmd.split())
-
-    def _split_incremental(self):
-        tmp_dir = Path("splitted_files")
-        self._delete_directory(tmp_dir)
-        subprocess.run(["mkdir", "-p", tmp_dir])
-        split_cmd = "split --bytes=100 {} {}".format(self._encrypted_file, tmp_dir / "part_")
-        subprocess.run(split_cmd.split())
-        self._files_splitted = list(Path(".").glob(str(tmp_dir) + "/*"))
-        print(self._files_splitted)
 
     def _upload_to_dropbox(self):
         self._log.write("Uploading to dropbox.")
         try:
-            for f in self._files_splitted:
-                self._log.write("Source file: {}".format(f))
-                target_file = self._dropbox_target / f
-                self._log.write("Target file: {}".format(target_file))
-                dropbox_backup.upload_file(file_path=str(f), dest_path=str(target_file), token=self._dropbox_token)
+            f = self._encrypted_file
+            self._log.write("Source file: {}".format(f))
+            target_file = self._dropbox_target / f
+            self._log.write("Target file: {}".format(target_file))
+            dropbox_backup.upload_file(file_path=str(f), dest_path=str(target_file), token=self._dropbox_token)
         except Exception as ex:
             self._log.write("Exception when uploading to dropbox: {}.".format(ex))
+            raise
         else:
             self._log.write("File uploaded successfully to dropbox.")
 
@@ -137,7 +147,6 @@ class EncryptedBackup(object):
         self._create_mirror()
         self._compress_incremental()
         self._encrypt_incremental()
-        self._split_incremental()
         self._upload_to_dropbox()
 
 
@@ -145,16 +154,19 @@ g_config = configparser.ConfigParser()
 g_config.read("example.ini")
 g_log = BackupLog(g_config["backup"]["log_dir"])
 lock_file = LockFile(g_config)
+mailer = SendMail(g_config)
 try:
     if (lock_file.locked):
         g_log.write("Lock file is locked. Assuming process already running. Exiting.")
         exit()
     else:
         lock_file.lock()
-    encrypted_backup = EncryptedBackup(g_config)
+    encrypted_backup = EncryptedBackup(g_config, mailer)
     encrypted_backup.run()
+    mailer.send("Backup success", "Everything is backed up.")
 except Exception as e:
     g_log.write("Got exception: " + str(e))
+    mailer.send("Backup failed", "Something failed when backing up. Exception was: {}".format(str(e)))
     raise e
 finally:
     lock_file.unlock()
