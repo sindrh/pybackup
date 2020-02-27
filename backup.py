@@ -65,8 +65,8 @@ class EncryptedBackup(object):
         self._dropbox_token = config["general"]["dropbox_token"]
         self._dropbox_target = Path(config["general"]["dropbox_target"]) / Path(inc_name)
         self._full_backup_interval = int(config["general"]["full_backup_interval"])
-        self._encrypted_file = "{}.gpg".format(inc_name)
-        self._tar_file = "{}.tar".format(inc_name)
+        self._encrypted_file = Path(config["backup"]["target_dir"]) / "{}.gpg".format(inc_name)
+        self._tar_file = Path(config["backup"]["target_dir"]) / "{}.tar".format(inc_name)
         self._files_splitted = []
 
     def _delete_file(self, file):
@@ -129,7 +129,7 @@ class EncryptedBackup(object):
         try:
             f = self._encrypted_file
             self._log.write("Source file: {}".format(f))
-            target_file = self._dropbox_target / f
+            target_file = self._dropbox_target / f.name
             self._log.write("Target file: {}".format(target_file))
             dropbox_backup.upload_file(file_path=str(f), dest_path=str(target_file), token=self._dropbox_token)
         except Exception as ex:
@@ -148,16 +148,20 @@ class EncryptedBackup(object):
         self._compress_incremental()
         self._encrypt_incremental()
         self._upload_to_dropbox()
-
+        self._delete_file(self._encrypted_file)
+        self._delete_file(self._tar_file)
 
 g_config = configparser.ConfigParser()
-g_config.read("example.ini")
+g_config.read("/home/sindre/bin/pybackup/example.ini")
 g_log = BackupLog(g_config["backup"]["log_dir"])
 lock_file = LockFile(g_config)
 mailer = SendMail(g_config)
+was_locked = False
 try:
     if (lock_file.locked):
-        g_log.write("Lock file is locked. Assuming process already running. Exiting.")
+        print("Lock file is locked. Assuming process already running. Exiting.")
+        mailer.send("Backup not started", "Backup did not start. Lock file is locked.")
+        was_locked = True
         exit()
     else:
         lock_file.lock()
@@ -169,4 +173,5 @@ except Exception as e:
     mailer.send("Backup failed", "Something failed when backing up. Exception was: {}".format(str(e)))
     raise e
 finally:
-    lock_file.unlock()
+    if not was_locked:
+        lock_file.unlock()
