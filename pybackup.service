@@ -1,0 +1,8 @@
+[Unit]
+Description=pybackup
+
+[Service]
+ExecStart=/home/pi/git/pybackup/backup.py
+
+[Install]
+WantedBy=multi-user.target
