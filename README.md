@@ -28,7 +28,8 @@ Set up the configuration in the .ini file.
 Add the ``.service`` files to ``$HOME/.config/systemd/user``. Then do:
 ```
 systemctl --user enable pybackup.service
-systemctl --user start pybackup.service
+systemctl --user enable pybackup.timer
+systemctl --user start pybackup.timer
 ```
 
 ### Set up backup folders

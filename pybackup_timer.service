@@ -1,5 +1,0 @@
-[Unit]
-Description=Timer for pybackup.
-
-[Timer]
-OnCalendar=*-*-* 22:09:00
