@@ -18,7 +18,10 @@ Set up the configuration in the .ini file.
 
 ### Dropbox authentication
 
-Create a new Dropbox application and generate an access token. Paste this token to ``dropbox_token`` in the config file.
+* Create a new Dropbox application and generate an access token.
+* Paste this token to ``dropbox_token`` in the config file.
+* Create a folder in Dropbox, for example ``Backup``.
+* Set ``dropbox_target`` to the folder name, remember the slash at the end. Example: ``/Backup/``
 
 ### Add a new service
 
@@ -27,6 +30,12 @@ Add the ``.service`` files to ``$HOME/.config/systemd/user``. Then do:
 systemctl --user enable pybackup.service
 systemctl --user start pybackup.service
 ```
+
+### Set up backup folders
+
+* ``src_dirs`` is the path to the source folder.
+* ``target_dir`` is the path where a local backup should be placed.
+* ``log_dir`` is the path to the log folder.
 
 ## How to run
 
