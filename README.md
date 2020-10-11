@@ -32,6 +32,13 @@ systemctl --user enable pybackup.timer
 systemctl --user start pybackup.timer
 ```
 
+Enable user lingering to be able to spawn processes when not logged in:
+```
+sudo loginctl enable-linger "$USER"
+```
+
+The PC may or may not need a reboot after this operation.
+
 ### Set up backup folders
 
 * ``src_dirs`` is the path to the source folder.

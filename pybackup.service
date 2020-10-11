@@ -5,4 +5,4 @@ Description=pybackup
 ExecStart=/home/pi/git/pybackup/backup.py
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
