@@ -70,10 +70,8 @@ class EncryptedBackup(object):
         self._encrypted_file = Path(config["backup"]["target_dir"]) / "{}.gpg".format(inc_name)
         self._tar_file = Path(config["backup"]["target_dir"]) / "{}.tar".format(inc_name)
         self._files_splitted = []
-        self._must_do_full_backup = False
         dirs = list(self._incrementals_dir.glob("*")) + list(self._full_backups_dir.glob("*"))
-        if (len(dirs) % self._full_backup_interval == 0):
-            self._must_do_full_backup = True
+        self._next_full_backup = len(dirs) % self._full_backup_interval
 
     def _delete_file(self, file):
         subprocess.run(["rm", "-f", file])
@@ -81,8 +79,8 @@ class EncryptedBackup(object):
     def _delete_directory(self, directory):
         subprocess.run(["rm", "-rf", directory])
 
-    def _is_full_backup(self):
-        return self._must_do_full_backup
+    def next_full_backup(self):
+        return self._next_full_backup
 
     def _delete_mirror(self):
         self._log.write("Removing directory of mirror backup.")
@@ -140,7 +138,7 @@ class EncryptedBackup(object):
             f = self._encrypted_file
             self._log.write("Source file: {}".format(f))
             backup_type_dir = "Incremental"
-            if self._is_full_backup():
+            if self.next_full_backup() == 0:
                 backup_type_dir = "Full"
             target_file = self._dropbox_target / backup_type_dir / f.name
             self._log.write("Target file: {}".format(target_file))
@@ -155,7 +153,7 @@ class EncryptedBackup(object):
         self._log.write("Starting backup.")
         self._log.write("Source directories is '{}'.".format(self._src_dirs))
         backup_target = self._incremental_dir
-        if self._is_full_backup():
+        if self.next_full_backup() == 0:
             backup_target = self._full_backup_dir
             self._notify_full_backup()
             self._delete_mirror()
@@ -184,7 +182,11 @@ try:
         lock_file.lock()
     encrypted_backup = EncryptedBackup(g_config, mailer)
     encrypted_backup.run()
-    mailer.send("Backup success", "Everything is backed up.")
+    next_full = encrypted_backup.next_full_backup()
+    next_full_msg = ""
+    if (next_full > 0):
+        next_full_msg = "Number of incremental backups before next full backup: {}.".format(next_full - 1)
+    mailer.send("Backup success", "Everything is backed up. {}".format(next_full_msg))
 except Exception as e:
     g_log.write("Got exception: " + str(e))
     mailer.send("Backup failed", "Something failed when backing up. Exception was: {}".format(str(e)))
