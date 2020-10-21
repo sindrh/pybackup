@@ -71,7 +71,12 @@ class EncryptedBackup(object):
         self._tar_file = Path(config["backup"]["target_dir"]) / "{}.tar".format(inc_name)
         self._files_splitted = []
         dirs = list(self._incrementals_dir.glob("*")) + list(self._full_backups_dir.glob("*"))
-        self._next_full_backup = len(dirs) % self._full_backup_interval
+        len_dirs = len(dirs)
+
+        if self._full_backup_interval < 1:
+            raise ValueError("Full backup interval must be larger than 0.")
+
+        self._next_full_backup = self._full_backup_interval - 1 - (len_dirs % self._full_backup_interval)
 
     def _delete_file(self, file):
         subprocess.run(["rm", "-f", file])
